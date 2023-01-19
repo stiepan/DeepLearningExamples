@@ -43,6 +43,7 @@ try:
     from nvidia.dali.pipeline import Pipeline
     import nvidia.dali.ops as ops
     import nvidia.dali.types as types
+    from image_classification.dali_autoaugment import auto_augment_pipe
 
     DATA_BACKEND_CHOICES.append("dali-gpu")
     DATA_BACKEND_CHOICES.append("dali-cpu")
@@ -249,20 +250,22 @@ def get_dali_train_loader(dali_cpu=False):
             world_size = 1
 
         traindir = os.path.join(data_path, "train")
-        if augmentation is not None:
-            raise NotImplementedError(
-                f"Augmentation {augmentation} for dali loader is not supported"
-            )
 
-        pipe = HybridTrainPipe(
-            batch_size=batch_size,
-            num_threads=workers,
-            device_id=rank % torch.cuda.device_count(),
-            data_dir=traindir,
-            interpolation=interpolation,
-            crop=image_size,
-            dali_cpu=dali_cpu,
-        )
+        pipeline_kwargs = {
+            "batch_size" : batch_size,
+            "num_threads" : workers,
+            "device_id" : rank % torch.cuda.device_count(),
+            "data_dir" : traindir,
+            "interpolation" : interpolation,
+            "crop" : image_size,
+            "dali_cpu" : dali_cpu,
+            "seed" : 12 + rank % torch.cuda.device_count(),
+        }
+
+        if augmentation == "autoaugment":
+            pipe = auto_augment_pipe(**pipeline_kwargs)
+        else:
+            pipe = HybridTrainPipe(**pipeline_kwargs)
 
         pipe.build()
         train_loader = DALIClassificationIterator(
