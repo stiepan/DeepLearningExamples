@@ -434,6 +434,7 @@ def get_pytorch_train_loader(
         transforms.RandomHorizontalFlip(),
     ]
     if augmentation == "autoaugment":
+        print("AUTOAUGMENT NORMAL")
         transforms_list.append(AutoaugmentImageNetPolicy())
     train_dataset = datasets.ImageFolder(traindir, transforms.Compose(transforms_list))
 

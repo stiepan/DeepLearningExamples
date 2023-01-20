@@ -34,11 +34,8 @@ def op_magnitude_range(lo, hi, num_magnitudes=11, use_sign=False):
     def decorator(function):
 
         @wraps(function)
-        def wrapper(samples, magnitude_idx, sign):
-            if use_sign:
-                magnitude = magnitudes[magnitude_idx]
-            else:
-                magnitude = sign * magnitudes[magnitude_idx]
+        def wrapper(samples, magnitude_idx):
+            magnitude = magnitudes[magnitude_idx]
             return function(samples, magnitude)
 
         return wrapper
@@ -46,7 +43,7 @@ def op_magnitude_range(lo, hi, num_magnitudes=11, use_sign=False):
     return decorator
 
 
-@op_magnitude_range(0, 0.3, use_sign=True)
+@op_magnitude_range(0, 0.3)
 def shearX(samples, parameter):
     mt = fn.transforms.shear(shear=[parameter, 0])
     return fn.warp_affine(samples,
@@ -55,7 +52,7 @@ def shearX(samples, parameter):
                           inverse_map=False)
 
 
-@op_magnitude_range(0, 0.3, use_sign=True)
+@op_magnitude_range(0, 0.3)
 def shearY(samples, parameter):
     mt = fn.transforms.shear(shear=[0, parameter])
     return fn.warp_affine(samples,
@@ -64,7 +61,7 @@ def shearY(samples, parameter):
                           inverse_map=False)
 
 
-@op_magnitude_range(0, 250, use_sign=True)
+@op_magnitude_range(0, 250)
 def translateX(samples, parameter):
     mt = fn.transforms.translation(offset=[parameter, 0])
     return fn.warp_affine(samples,
@@ -73,7 +70,7 @@ def translateX(samples, parameter):
                           inverse_map=False)
 
 
-@op_magnitude_range(0, 250, use_sign=True)
+@op_magnitude_range(0, 250)
 def translateY(samples, parameter):
     mt = fn.transforms.translation(offset=[0, parameter])
     return fn.warp_affine(samples,
@@ -82,7 +79,7 @@ def translateY(samples, parameter):
                           inverse_map=False)
 
 
-@op_magnitude_range(0, 30, use_sign=True)
+@op_magnitude_range(0, 30)
 def rotate(samples, parameter):
     return fn.rotate(samples, angle=parameter, fill_value=128)
 
@@ -113,18 +110,20 @@ def posterize(samples, parameter):
 def solarize(samples, threshold):
     samples_inv = 255 - samples
     mask_left = samples < np.uint8(threshold)
-    mask_right = 1 - mask_left
+    mask_right = types.Constant(1) - mask_left
     return fn.cast(mask_left * samples + mask_right * samples_inv,
                    dtype=types.UINT8)
+    # return samples
 
 
 @op_magnitude_range(0, 256)
 def solarize_add(samples, shift):
     samples_shifted = fn.cast_like(samples + shift, samples)
     mask_left = samples < 128
-    mask_right = 1 - mask_left
+    mask_right = types.Constant(1) - mask_left
     return fn.cast_like(mask_left * samples_shifted + mask_right * samples,
                         samples)
+    # return samples
 
 
 @op_magnitude_range(0.1, 1.9)
@@ -135,19 +134,19 @@ def sharpness(samples, magnitude):
     return fn.experimental.filter(samples, kernel)
 
 
-@op_magnitude_range(0, 0)
+@op_magnitude_range(0, 1)
 def invert(samples, _):
     return fn.cast_like(255 - samples, samples)
 
 
 # TODO(klecki): No-op
-@op_magnitude_range(0, 0)
+@op_magnitude_range(0, 1)
 def equalize(samples, _):
     # return fn.experimental.equalize(samples)
     return samples
 
 
-@op_magnitude_range(0, 0)
+@op_magnitude_range(0, 1)
 def autocontrast(samples, _):
     lo, hi = fn.reductions.min(samples,
                                axes=[-3, -2]), fn.reductions.max(samples,
@@ -159,11 +158,11 @@ def autocontrast(samples, _):
 
 def subpolicy(op0, p0, mag0, op1, p1, mag1):
 
-    def subpolicy_impl(images, rand0, rand1, sign0, sign1):
+    def subpolicy_impl(images, rand0, rand1):
         if rand0 < p0:
-            images = op0(images, mag0, sign0)
+            images = op0(images, mag0)
         if rand1 < p1:
-            images = op1(images, mag1, sign1)
+            images = op1(images, mag1)
         return images
 
     return subpolicy_impl
@@ -206,29 +205,26 @@ def apply_policies(imgs, policies):
     rand0 = fn.random.uniform()
     rand1 = fn.random.uniform()
 
-    # TODO(klecki): This is sadly ugly
-    sign0 = fn.random.uniform(values=[-1.0, 1.0], dtype=DALIDataType.FLOAT)
-    sign1 = fn.random.uniform(values=[-1.0, 1.0], dtype=DALIDataType.FLOAT)
-
-    def recursive_split(imgs, rand0, rand1, sign0, sign1, policy_id,
+    def recursive_split(imgs, rand0, rand1, policy_id,
                         start_offset, elems):
         if elems == 1:
             policy = policies[start_offset]
-            return policy(imgs, rand0, rand1, sign0, sign1)
+            return policy(imgs, rand0, rand1)
         half_size = elems // 2
         if policy_id < start_offset + half_size:
-            return recursive_split(imgs, rand0, rand1, sign0, sign1, policy_id,
+            return recursive_split(imgs, rand0, rand1, policy_id,
                                    start_offset, half_size)
         else:
-            return recursive_split(imgs, rand0, rand1, sign0, sign1, policy_id,
+            return recursive_split(imgs, rand0, rand1, policy_id,
                                    start_offset + half_size, elems - half_size)
 
-    return recursive_split(imgs, rand0, rand1, sign0, sign1, policy_id, 0,
+    return recursive_split(imgs, rand0, rand1, policy_id, 0,
                            len(policies))
 
 
 @pipeline_def(enable_conditionals=True)
 def auto_augment_pipe(data_dir, interpolation, crop, dali_cpu=False):
+    print("Building DALI with AutoAugment")
     interpolation = {
         "bicubic": types.INTERP_CUBIC,
         "bilinear": types.INTERP_LINEAR,
@@ -278,15 +274,18 @@ def auto_augment_pipe(data_dir, interpolation, crop, dali_cpu=False):
         num_attempts=100,
         antialias=False)
 
-    images = fn.crop_mirror_normalize(
-        images.gpu(),
+
+    images = fn.flip(images, horizontal=rng)
+
+    output = apply_policies(images, policies)
+    # output = fn.transpose(output, perm=[2, 0, 1])
+
+    output = fn.crop_mirror_normalize(output.gpu(),
         dtype=types.FLOAT,
         output_layout=types.NCHW,
         crop=(crop, crop),
         mean=[0.485 * 255, 0.456 * 255, 0.406 * 255],
-        std=[0.229 * 255, 0.224 * 255, 0.225 * 255],
-        mirror=rng)
+        std=[0.229 * 255, 0.224 * 255, 0.225 * 255])
 
-    output = apply_policies(images, policies)
 
     return output, labels
