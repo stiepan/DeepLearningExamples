@@ -28,22 +28,59 @@ import torch
 # the AutoAugment paper uses different range!!!!
 
 
-def op_magnitude_range(lo, hi, num_magnitudes=11, use_sign=False):
+def op_magnitude_range(lo, hi, num_magnitudes=11, auto_symmetric=False):
+    """Decorator for automatizing the the discrete magnitude -> parameter from range mapping.
+
+    Parameters
+    ----------
+    lo : Float
+        Low end of the range
+    hi : Float
+        High end of the range (inclusive)
+    num_magnitudes : int, optional
+        How many magnitude steps are there, by default 11
+    auto_symmetric : bool, optional
+        If this is true, the operation is assumed to accept a range in a form [0, x],
+        and the code is automatically transformed, for a given magnitude `m` into
+        selecting the m-th value from [0, x], that is:
+        `v = np.linspace(0, x, num_magnitudes)[m]`
+        and randomly passing `v` or `-v` to the operator.
+        By default False
+
+    Returns
+    -------
+    Callable[[DataNode, MagnitudeIdx, DataNode], DataNode]
+        Function that takes as parameters DataNode representing input, the fixed magnitude idx,
+        and the potentially unused random variable for symmetric operations (True for positive,
+        False for negative).
+        Returns a processed DataNode.
+    """
     magnitudes = np.linspace(lo, hi, num_magnitudes, dtype=np.float32)
 
     def decorator(function):
 
         @wraps(function)
-        def wrapper(samples, magnitude_idx):
+        def wrapper_regular(samples, magnitude_idx, _):
             magnitude = magnitudes[magnitude_idx]
             return function(samples, magnitude)
 
-        return wrapper
+        @wraps(function)
+        def wrapper_symmetric(samples, magnitude_idx, is_positive):
+            magnitude = magnitudes[magnitude_idx]
+            if is_positive:
+                return function(samples, magnitude)
+            else:
+                return function(samples, -magnitude)
+
+        if auto_symmetric:
+            return wrapper_symmetric
+        else:
+            return wrapper_regular
 
     return decorator
 
 
-@op_magnitude_range(0, 0.3)
+@op_magnitude_range(0, 0.3, auto_symmetric=True)
 def shearX(samples, parameter):
     mt = fn.transforms.shear(shear=[parameter, 0])
     return fn.warp_affine(samples,
@@ -52,7 +89,7 @@ def shearX(samples, parameter):
                           inverse_map=False)
 
 
-@op_magnitude_range(0, 0.3)
+@op_magnitude_range(0, 0.3, auto_symmetric=True)
 def shearY(samples, parameter):
     mt = fn.transforms.shear(shear=[0, parameter])
     return fn.warp_affine(samples,
@@ -61,7 +98,7 @@ def shearY(samples, parameter):
                           inverse_map=False)
 
 
-@op_magnitude_range(0, 250)
+@op_magnitude_range(0, 250, auto_symmetric=True)
 def translateX(samples, parameter):
     mt = fn.transforms.translation(offset=[parameter, 0])
     return fn.warp_affine(samples,
@@ -70,7 +107,7 @@ def translateX(samples, parameter):
                           inverse_map=False)
 
 
-@op_magnitude_range(0, 250)
+@op_magnitude_range(0, 250, auto_symmetric=True)
 def translateY(samples, parameter):
     mt = fn.transforms.translation(offset=[0, parameter])
     return fn.warp_affine(samples,
@@ -79,7 +116,7 @@ def translateY(samples, parameter):
                           inverse_map=False)
 
 
-@op_magnitude_range(0, 30)
+@op_magnitude_range(0, 30, auto_symmetric=True)
 def rotate(samples, parameter):
     return fn.rotate(samples, angle=parameter, fill_value=128)
 
@@ -156,44 +193,46 @@ def autocontrast(samples, _):
     return fn.cast_like((samples - lo) * (255 / (hi - lo)), samples)
 
 
-def subpolicy(op0, p0, mag0, op1, p1, mag1):
+def subpolicy(op_desc0, op_desc1):
+    op0, p0, mag0 = op_desc0
+    op1, p1, mag1 = op_desc1
 
-    def subpolicy_impl(images, rand0, rand1):
+    def subpolicy_impl(images, rand0, rand1, is_pos0, is_pos1):
         if rand0 < p0:
-            images = op0(images, mag0)
+            images = op0(images, mag0, is_pos0)
         if rand1 < p1:
-            images = op1(images, mag1)
+            images = op1(images, mag1, is_pos1)
         return images
 
     return subpolicy_impl
 
 
 policies = [
-    subpolicy(equalize,  0.8, 1, shearY,       0.8, 4),
-    subpolicy(color,     0.4, 9, equalize,     0.6, 3),
-    subpolicy(color,     0.4, 1, rotate,       0.6, 8),
-    subpolicy(solarize,  0.8, 3, equalize,     0.4, 7),
-    subpolicy(solarize,  0.4, 2, solarize,     0.6, 2),
-    subpolicy(color,     0.2, 0, equalize,     0.8, 8),
-    subpolicy(equalize,  0.4, 8, solarize_add, 0.8, 3),
-    subpolicy(shearX,    0.2, 9, rotate,       0.6, 8),
-    subpolicy(color,     0.6, 1, equalize,     1.0, 2),
-    subpolicy(invert,    0.4, 9, rotate,       0.6, 0),
-    subpolicy(equalize,  1.0, 9, shearY,       0.6, 3),
-    subpolicy(color,     0.4, 7, equalize,     0.6, 0),
-    subpolicy(posterize, 0.4, 6, autocontrast, 0.4, 7),
-    subpolicy(solarize,  0.6, 8, color,        0.6, 9),
-    subpolicy(solarize,  0.2, 4, rotate,       0.8, 9),
-    subpolicy(rotate,    1.0, 7, translateY,   0.8, 9),
-    subpolicy(shearX,    0.0, 0, solarize,     0.8, 4),
-    subpolicy(shearY,    0.8, 0, color,        0.6, 4),
-    subpolicy(color,     1.0, 0, rotate,       0.6, 2),
-    subpolicy(equalize,  0.8, 4, equalize,     0.0, 8),
-    subpolicy(equalize,  1.0, 4, autocontrast, 0.6, 2),
-    subpolicy(shearY,    0.4, 7, solarize_add, 0.6, 7),
-    subpolicy(posterize, 0.8, 2, solarize,     0.6, 10),
-    subpolicy(solarize,  0.6, 8, equalize,     0.6, 1),
-    subpolicy(color,     0.8, 6, rotate,       0.4, 5),
+    subpolicy((equalize,  0.8, 1), (shearY,       0.8, 4)),
+    subpolicy((color,     0.4, 9), (equalize,     0.6, 3)),
+    subpolicy((color,     0.4, 1), (rotate,       0.6, 8)),
+    subpolicy((solarize,  0.8, 3), (equalize,     0.4, 7)),
+    subpolicy((solarize,  0.4, 2), (solarize,     0.6, 2)),
+    subpolicy((color,     0.2, 0), (equalize,     0.8, 8)),
+    subpolicy((equalize,  0.4, 8), (solarize_add, 0.8, 3)),
+    subpolicy((shearX,    0.2, 9), (rotate,       0.6, 8)),
+    subpolicy((color,     0.6, 1), (equalize,     1.0, 2)),
+    subpolicy((invert,    0.4, 9), (rotate,       0.6, 0)),
+    subpolicy((equalize,  1.0, 9), (shearY,       0.6, 3)),
+    subpolicy((color,     0.4, 7), (equalize,     0.6, 0)),
+    subpolicy((posterize, 0.4, 6), (autocontrast, 0.4, 7)),
+    subpolicy((solarize,  0.6, 8), (color,        0.6, 9)),
+    subpolicy((solarize,  0.2, 4), (rotate,       0.8, 9)),
+    subpolicy((rotate,    1.0, 7), (translateY,   0.8, 9)),
+    subpolicy((shearX,    0.0, 0), (solarize,     0.8, 4)),
+    subpolicy((shearY,    0.8, 0), (color,        0.6, 4)),
+    subpolicy((color,     1.0, 0), (rotate,       0.6, 2)),
+    subpolicy((equalize,  0.8, 4), (equalize,     0.0, 8)),
+    subpolicy((equalize,  1.0, 4), (autocontrast, 0.6, 2)),
+    subpolicy((shearY,    0.4, 7), (solarize_add, 0.6, 7)),
+    subpolicy((posterize, 0.8, 2), (solarize,     0.6, 10)),
+    subpolicy((solarize,  0.6, 8), (equalize,     0.6, 1)),
+    subpolicy((color,     0.8, 6), (rotate,       0.4, 5)),
 ]
 
 def apply_policies(imgs, policies):
@@ -205,20 +244,23 @@ def apply_policies(imgs, policies):
     rand0 = fn.random.uniform()
     rand1 = fn.random.uniform()
 
-    def recursive_split(imgs, rand0, rand1, policy_id,
+    is_pos0 = fn.random.coin_flip(dtype=DALIDataType.BOOL)
+    is_pos1 = fn.random.coin_flip(dtype=DALIDataType.BOOL)
+
+    def recursive_split(imgs, rand0, rand1, is_pos0, is_pos1, policy_id,
                         start_offset, elems):
         if elems == 1:
             policy = policies[start_offset]
-            return policy(imgs, rand0, rand1)
+            return policy(imgs, rand0, rand1, is_pos0, is_pos1)
         half_size = elems // 2
         if policy_id < start_offset + half_size:
-            return recursive_split(imgs, rand0, rand1, policy_id,
+            return recursive_split(imgs, rand0, rand1, is_pos0, is_pos1, policy_id,
                                    start_offset, half_size)
         else:
-            return recursive_split(imgs, rand0, rand1, policy_id,
+            return recursive_split(imgs, rand0, rand1, is_pos0, is_pos1, policy_id,
                                    start_offset + half_size, elems - half_size)
 
-    return recursive_split(imgs, rand0, rand1, policy_id, 0,
+    return recursive_split(imgs, rand0, rand1, is_pos0, is_pos1, policy_id, 0,
                            len(policies))
 
 
@@ -230,6 +272,7 @@ def auto_augment_pipe(data_dir, interpolation, crop, dali_cpu=False):
         "bilinear": types.INTERP_LINEAR,
         "triangular": types.INTERP_TRIANGULAR,
     }[interpolation]
+    # TODO(klecki): Get this out of scope of the function so it is not traced
     if torch.distributed.is_initialized():
         rank = torch.distributed.get_rank()
         world_size = torch.distributed.get_world_size()
@@ -278,7 +321,6 @@ def auto_augment_pipe(data_dir, interpolation, crop, dali_cpu=False):
     images = fn.flip(images, horizontal=rng)
 
     output = apply_policies(images, policies)
-    # output = fn.transpose(output, perm=[2, 0, 1])
 
     output = fn.crop_mirror_normalize(output.gpu(),
         dtype=types.FLOAT,
