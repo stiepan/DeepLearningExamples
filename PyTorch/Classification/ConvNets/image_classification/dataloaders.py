@@ -259,11 +259,11 @@ def get_dali_train_loader(dali_cpu=False):
             "interpolation" : interpolation,
             "crop" : image_size,
             "dali_cpu" : dali_cpu,
-            "seed" : 12 + rank % torch.cuda.device_count(),
         }
 
         if augmentation == "autoaugment":
-            pipe = auto_augment_pipe(**pipeline_kwargs, rank=rank, world_size=world_size)
+            pipe = auto_augment_pipe(**pipeline_kwargs, rank=rank, world_size=world_size,
+                                     seed=12 + rank % torch.cuda.device_count())
         else:
             pipe = HybridTrainPipe(**pipeline_kwargs)
 
