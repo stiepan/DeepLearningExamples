@@ -265,20 +265,13 @@ def apply_policies(imgs, policies):
 
 
 @pipeline_def(enable_conditionals=True)
-def auto_augment_pipe(data_dir, interpolation, crop, dali_cpu=False):
+def auto_augment_pipe(data_dir, interpolation, crop, dali_cpu=False, rank=0, world_size=1):
     print("Building DALI with AutoAugment")
     interpolation = {
         "bicubic": types.INTERP_CUBIC,
         "bilinear": types.INTERP_LINEAR,
         "triangular": types.INTERP_TRIANGULAR,
     }[interpolation]
-    # TODO(klecki): Get this out of scope of the function so it is not traced
-    if torch.distributed.is_initialized():
-        rank = torch.distributed.get_rank()
-        world_size = torch.distributed.get_world_size()
-    else:
-        rank = 0
-        world_size = 1
 
     rng = fn.random.coin_flip(probability=0.5)
 
@@ -291,25 +284,18 @@ def auto_augment_pipe(data_dir, interpolation, crop, dali_cpu=False):
         pad_last_batch=True)
 
     if dali_cpu:
-        dali_device = "cpu"
-        images = fn.decoders.image(
-            jpegs,
-            device=dali_device,
-            output_type=types.RGB)
+        images = fn.decoders.image(jpegs, device="cpu", output_type=types.RGB)
     else:
-        dali_device = "gpu"
-        # This padding sets the size of the internal nvJPEG buffers to be able to handle all images from full-sized ImageNet
-        # without additional reallocations
-        images = fn.decoders.image(
-            jpegs,
-            device="mixed",
-            output_type=types.RGB,
-            device_memory_padding=211025920,
-            host_memory_padding=140544512)
+        # This padding sets the size of the internal nvJPEG buffers to be able to handle all images
+        # from full-sized ImageNet without additional reallocations
+        images = fn.decoders.image(jpegs,
+                                   device="mixed",
+                                   output_type=types.RGB,
+                                   device_memory_padding=211025920,
+                                   host_memory_padding=140544512)
 
     images = fn.random_resized_crop(
         images,
-        device=dali_device,
         size=[crop, crop],
         interp_type=interpolation,
         random_aspect_ratio=[0.75, 4.0 / 3.0],

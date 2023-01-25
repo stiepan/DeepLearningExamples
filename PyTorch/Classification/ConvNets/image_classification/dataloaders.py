@@ -263,7 +263,7 @@ def get_dali_train_loader(dali_cpu=False):
         }
 
         if augmentation == "autoaugment":
-            pipe = auto_augment_pipe(**pipeline_kwargs)
+            pipe = auto_augment_pipe(**pipeline_kwargs, rank=rank, world_size=world_size)
         else:
             pipe = HybridTrainPipe(**pipeline_kwargs)
 
