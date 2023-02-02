@@ -503,6 +503,12 @@ def prepare_for_training(args, model_args, model_arch):
     elif args.data_backend == "dali-cpu":
         get_train_loader = get_dali_train_loader(dali_cpu=True)
         get_val_loader = get_dali_val_loader()
+    elif args.data_backend == "dali-cpu-gpu-aa":
+        get_train_loader = get_dali_train_loader(dali_cpu=True, cpu_gpu=1)
+        get_val_loader = get_dali_val_loader()
+    elif args.data_backend == "dali-cpu-gpu-aa-2":
+        get_train_loader = get_dali_train_loader(dali_cpu=True, cpu_gpu=2)
+        get_val_loader = get_dali_val_loader()
     elif args.data_backend == "synthetic":
         get_val_loader = get_synthetic_loader
         get_train_loader = get_synthetic_loader

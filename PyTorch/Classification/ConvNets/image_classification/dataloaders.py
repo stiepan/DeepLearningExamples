@@ -47,6 +47,8 @@ try:
 
     DATA_BACKEND_CHOICES.append("dali-gpu")
     DATA_BACKEND_CHOICES.append("dali-cpu")
+    DATA_BACKEND_CHOICES.append("dali-cpu-gpu-aa")
+    DATA_BACKEND_CHOICES.append("dali-cpu-gpu-aa-2")
 except ImportError:
     print(
         "Please install DALI from https://www.github.com/NVIDIA/DALI to run this example."
@@ -227,7 +229,7 @@ class DALIWrapper(object):
         )
 
 
-def get_dali_train_loader(dali_cpu=False):
+def get_dali_train_loader(dali_cpu=False, cpu_gpu=0):
     def gdtl(
         data_path,
         image_size,
@@ -263,7 +265,7 @@ def get_dali_train_loader(dali_cpu=False):
 
         if augmentation == "autoaugment":
             pipe = auto_augment_pipe(**pipeline_kwargs, rank=rank, world_size=world_size,
-                                     seed=12 + rank % torch.cuda.device_count())
+                                     seed=12 + rank % torch.cuda.device_count(), cpu_gpu=cpu_gpu)
         else:
             pipe = HybridTrainPipe(**pipeline_kwargs)
 

@@ -265,7 +265,7 @@ def apply_policies(imgs, policies):
 
 
 @pipeline_def(enable_conditionals=True)
-def auto_augment_pipe(data_dir, interpolation, crop, dali_cpu=False, rank=0, world_size=1):
+def auto_augment_pipe(data_dir, interpolation, crop, dali_cpu=False, rank=0, world_size=1, cpu_gpu=0):
     print("Building DALI with AutoAugment")
     interpolation = {
         "bicubic": types.INTERP_CUBIC,
@@ -294,6 +294,8 @@ def auto_augment_pipe(data_dir, interpolation, crop, dali_cpu=False, rank=0, wor
                                    device_memory_padding=211025920,
                                    host_memory_padding=140544512)
 
+    if cpu_gpu == 1:
+        images = images.gpu()
     images = fn.random_resized_crop(
         images,
         size=[crop, crop],
@@ -305,6 +307,10 @@ def auto_augment_pipe(data_dir, interpolation, crop, dali_cpu=False, rank=0, wor
 
 
     images = fn.flip(images, horizontal=rng)
+
+
+    if cpu_gpu == 2:
+        images = images.gpu()
 
     output = apply_policies(images, policies)
 
