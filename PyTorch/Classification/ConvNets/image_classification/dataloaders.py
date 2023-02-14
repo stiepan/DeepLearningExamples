@@ -43,12 +43,13 @@ try:
     from nvidia.dali.pipeline import Pipeline
     import nvidia.dali.ops as ops
     import nvidia.dali.types as types
-    from image_classification.dali_autoaugment import auto_augment_pipe
+    from image_classification.dali_autoaugment import auto_augment_pipe, aa_pipe, ta_pipe
 
     DATA_BACKEND_CHOICES.append("dali-gpu")
     DATA_BACKEND_CHOICES.append("dali-cpu")
     DATA_BACKEND_CHOICES.append("dali-cpu-gpu-aa")
     DATA_BACKEND_CHOICES.append("dali-cpu-gpu-aa-2")
+    DATA_BACKEND_CHOICES.append("dali")
 except ImportError:
     print(
         "Please install DALI from https://www.github.com/NVIDIA/DALI to run this example."
@@ -266,8 +267,17 @@ def get_dali_train_loader(dali_cpu=False, cpu_gpu=0):
         if augmentation == "autoaugment":
             pipe = auto_augment_pipe(**pipeline_kwargs, rank=rank, world_size=world_size,
                                      seed=12 + rank % torch.cuda.device_count(), cpu_gpu=cpu_gpu)
-        else:
+        elif augmentation == "aa":
+            pipe = aa_pipe(**pipeline_kwargs, rank=rank, world_size=world_size,
+                           seed=12 + rank % torch.cuda.device_count())
+
+        elif augmentation == "ta":
+            pipe = ta_pipe(**pipeline_kwargs, rank=rank, world_size=world_size,
+                           seed=12 + rank % torch.cuda.device_count())
+        elif augmentation is None:
             pipe = HybridTrainPipe(**pipeline_kwargs)
+        else:
+            raise ValueError("Misconfigured DALI")
 
         pipe.build()
         train_loader = DALIClassificationIterator(

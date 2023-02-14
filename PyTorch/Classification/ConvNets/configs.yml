@@ -105,10 +105,8 @@ anchors:
         mixup: 0.2
         lr_schedule: cosine
         momentum: 0.9
-        warmup: 16 
+        warmup: 16
         epochs: 400
-        data_backend: pytorch
-        augmentation: autoaugment
         num_classes: 1000
         interpolation: bicubic
     efficientnet_b0_params_4k: &efficientnet_b0_params_4k
