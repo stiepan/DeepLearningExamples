@@ -1,0 +1,14 @@
+#base on NVIDIA DL for Pytorch
+FROM nvcr.io/nvidia/pytorch:21.03-py3
+
+WORKDIR /
+RUN git clone https://github.com/NVIDIA/DeepLearningExamples.git joc
+WORKDIR /joc
+RUN git checkout master
+
+
+# The container always lacks this
+RUN pip install nvidia-pyindex
+RUN pip install nvidia-dllogger
+
+WORKDIR /joc/PyTorch/Classification/ConvNets/
