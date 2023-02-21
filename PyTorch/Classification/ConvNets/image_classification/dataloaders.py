@@ -209,28 +209,35 @@ class HybridValPipe(Pipeline):
 
 
 class DALIWrapper(object):
-    def gen_wrapper(dalipipeline, num_classes, one_hot, memory_format):
+    def gen_wrapper(dalipipeline, num_classes, one_hot, memory_format, pipe=None):
         for data in dalipipeline:
             input = data[0]["data"].contiguous(memory_format=memory_format)
             target = torch.reshape(data[0]["label"], [-1]).cuda().long()
             if one_hot:
                 target = expand(num_classes, torch.float, target)
             yield input, target
+        if pipe is not None:
+            for name, mem in sorted(pipe.executor_statistics().items()):
+                print(name, mem)
         dalipipeline.reset()
 
-    def __init__(self, dalipipeline, num_classes, one_hot, memory_format):
+    def __init__(self, dalipipeline, num_classes, one_hot, memory_format, pipe=None):
         self.dalipipeline = dalipipeline
         self.num_classes = num_classes
         self.one_hot = one_hot
         self.memory_format = memory_format
+        self.pipe = pipe
 
     def __iter__(self):
+        if self.pipe is not None:
+            for name, mem in sorted(self.pipe.executor_statistics().items()):
+                print(name, mem)
         return DALIWrapper.gen_wrapper(
-            self.dalipipeline, self.num_classes, self.one_hot, self.memory_format
+            self.dalipipeline, self.num_classes, self.one_hot, self.memory_format, self.pipe
         )
 
 
-def get_dali_train_loader(dali_cpu=False, cpu_gpu=0):
+def get_dali_train_loader(dali_cpu=False, cpu_gpu=0, workspace="/"):
     def gdtl(
         data_path,
         image_size,
@@ -262,6 +269,7 @@ def get_dali_train_loader(dali_cpu=False, cpu_gpu=0):
             "interpolation" : interpolation,
             "crop" : image_size,
             "dali_cpu" : dali_cpu,
+            "enable_memory_stats": True,
         }
 
         if augmentation == "autoaugment":
@@ -280,12 +288,13 @@ def get_dali_train_loader(dali_cpu=False, cpu_gpu=0):
             raise ValueError("Misconfigured DALI")
 
         pipe.build()
+        pipe.save_graph_to_dot_file(workspace+"/pipeline.dot", True, True, True)
         train_loader = DALIClassificationIterator(
             pipe, reader_name="Reader", fill_last_batch=False
         )
 
         return (
-            DALIWrapper(train_loader, num_classes, one_hot, memory_format),
+            DALIWrapper(train_loader, num_classes, one_hot, memory_format, pipe=pipe),
             int(pipe.epoch_size("Reader") / (world_size * batch_size)),
         )
 

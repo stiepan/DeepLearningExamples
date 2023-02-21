@@ -510,7 +510,7 @@ def prepare_for_training(args, model_args, model_arch):
         get_train_loader = get_dali_train_loader(dali_cpu=True, cpu_gpu=2)
         get_val_loader = get_dali_val_loader()
     elif args.data_backend == "dali":
-        get_train_loader = get_dali_train_loader(dali_cpu=False)
+        get_train_loader = get_dali_train_loader(dali_cpu=False, workspace=args.workspace)
         get_val_loader = get_dali_val_loader()
     elif args.data_backend == "synthetic":
         get_val_loader = get_synthetic_loader
