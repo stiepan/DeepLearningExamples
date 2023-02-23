@@ -22,7 +22,7 @@ from nvidia.dali.auto_aug import auto_augment, trivial_augment
 
 @pipeline_def(enable_conditionals=True)
 def aa_pipe(data_dir, interpolation, crop, dali_cpu=False, rank=0, world_size=1, cpu_gpu=0):
-    print(f"Building DALI with AutoAugment, {auto_augment.auto_augment_image_net}")
+    print(f"Building DALI with AutoAugment, {auto_augment.auto_augment_image_net_policy}")
     interpolation = {
         "bicubic": types.INTERP_CUBIC,
         "bilinear": types.INTERP_LINEAR,
@@ -63,7 +63,7 @@ def aa_pipe(data_dir, interpolation, crop, dali_cpu=False, rank=0, world_size=1,
 
     images = fn.flip(images, horizontal=rng)
 
-    output = auto_augment.apply_auto_augment(auto_augment.auto_augment_image_net, images, shapes=shapes)
+    output = auto_augment.apply_auto_augment(auto_augment.auto_augment_image_net_policy, images, shapes=shapes)
 
     output = fn.crop_mirror_normalize(output,
         dtype=types.FLOAT,
