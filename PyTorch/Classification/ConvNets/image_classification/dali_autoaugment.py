@@ -63,7 +63,7 @@ no_arithm_policy = auto_augment.Policy(
 
 @pipeline_def(enable_conditionals=True)
 def aa_pipe(data_dir, interpolation, crop, dali_cpu=False, rank=0, world_size=1, cpu_gpu=0):
-    print("Building DALI with AutoAugment")
+    print(f"Building DALI with AutoAugment, {no_arithm_policy}")
     interpolation = {
         "bicubic": types.INTERP_CUBIC,
         "bilinear": types.INTERP_LINEAR,

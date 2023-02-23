@@ -272,6 +272,8 @@ def get_dali_train_loader(dali_cpu=False, cpu_gpu=0, workspace="/"):
             "enable_memory_stats": True,
         }
 
+        print(f"HERE I AM using DALI with {pipeline_kwargs}, {augmentation}")
+
         if augmentation == "aa":
             pipe = aa_pipe(**pipeline_kwargs, rank=rank, world_size=world_size,
                            seed=12 + rank % torch.cuda.device_count())
