@@ -2,9 +2,9 @@
 FROM nvcr.io/nvidia/pytorch:23.01-py3
 
 WORKDIR /
-RUN git clone https://github.com/klecki/DeepLearningExamples.git joc
+RUN git clone https://github.com/stiepan/DeepLearningExamples joc
 WORKDIR /joc
-RUN git checkout dali-aa
+RUN git checkout aa_no_arithm
 
 RUN pip list | grep dali
 # The container always lacks this
