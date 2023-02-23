@@ -18,52 +18,11 @@ from nvidia.dali import types
 from nvidia.dali.pipeline.experimental import pipeline_def
 
 from nvidia.dali.auto_aug import auto_augment, trivial_augment
-from nvidia.dali.auto_aug import augmentations as a
-
-no_arithm_policy = auto_augment.Policy(
-    "ImageNet", 11, {
-        "shear_x": a.shear_x.augmentation((0, 0.3), True),
-        "shear_y": a.shear_y.augmentation((0, 0.3), True),
-        "translate_x": a.translate_x.augmentation((0, 0.45), True),
-        "translate_y": a.translate_y.augmentation((0, 0.45), True),
-        "rotate": a.rotate.augmentation((0, 30), True),
-        "brightness": a.brightness.augmentation((0.1, 1.9), False, None),
-        "contrast": a.contrast.augmentation((0.1, 1.9), False, None),
-        "color": a.color.augmentation((0.1, 1.9), False, None),
-        "posterize": a.posterize.augmentation((0, 4), False, a.poster_mask_uint8),
-        "equalize": a.equalize,
-    }, [
-        [("equalize", 0.8, 1), ('shear_y', 0.8, 4)],
-        [('color', 0.4, 9), ('equalize', 0.6, 3)],
-        [('color', 0.4, 1), ('rotate', 0.6, 8)],
-        [('translate_x', 0.8, 3), ('equalize', 0.4, 7)],
-        [('translate_x', 0.4, 2), ('translate_x', 0.6, 2)],
-        [('color', 0.2, 0), ('equalize', 0.8, 8)],
-        [('equalize', 0.4, 8), ('shear_x', 0.8, 3)],
-        [('shear_x', 0.2, 9), ('rotate', 0.6, 8)],
-        [('color', 0.6, 1), ('equalize', 1.0, 2)],
-        [('brightness', 0.4, 9), ('rotate', 0.6, 0)],
-        [('equalize', 1.0, 9), ('shear_y', 0.6, 3)],
-        [('color', 0.4, 7), ('equalize', 0.6, 0)],
-        [('posterize', 0.4, 6), ('contrast', 0.4, 7)],
-        [('translate_x', 0.6, 8), ('color', 0.6, 9)],
-        [('translate_x', 0.2, 4), ('rotate', 0.8, 9)],
-        [('rotate', 1.0, 7), ('translate_y', 0.8, 9)],
-        [('shear_x', 0.0, 0), ('translate_x', 0.8, 4)],
-        [('shear_y', 0.8, 0), ('color', 0.6, 4)],
-        [('color', 1.0, 0), ('rotate', 0.6, 2)],
-        [('equalize', 0.8, 4)],
-        [('equalize', 1.0, 4), ('contrast', 0.6, 2)],
-        [('shear_y', 0.4, 7), ('shear_x', 0.6, 7)],
-        [('posterize', 0.8, 2), ('translate_x', 0.6, 10)],
-        [('translate_x', 0.6, 8), ('equalize', 0.6, 1)],
-        [('color', 0.8, 6), ('rotate', 0.4, 5)],
-    ])
 
 
 @pipeline_def(enable_conditionals=True)
 def aa_pipe(data_dir, interpolation, crop, dali_cpu=False, rank=0, world_size=1, cpu_gpu=0):
-    print(f"Building DALI with AutoAugment, {no_arithm_policy}")
+    print(f"Building DALI with AutoAugment, {auto_augment.auto_augment_image_net}")
     interpolation = {
         "bicubic": types.INTERP_CUBIC,
         "bilinear": types.INTERP_LINEAR,
@@ -104,7 +63,7 @@ def aa_pipe(data_dir, interpolation, crop, dali_cpu=False, rank=0, world_size=1,
 
     images = fn.flip(images, horizontal=rng)
 
-    output = auto_augment.apply_auto_augment(no_arithm_policy, images, shapes=shapes)
+    output = auto_augment.apply_auto_augment(auto_augment.auto_augment_image_net, images, shapes=shapes)
 
     output = fn.crop_mirror_normalize(output,
         dtype=types.FLOAT,

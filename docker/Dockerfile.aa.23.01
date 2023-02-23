@@ -4,7 +4,7 @@ FROM nvcr.io/nvidia/pytorch:23.01-py3
 WORKDIR /
 RUN git clone https://github.com/stiepan/DeepLearningExamples joc
 WORKDIR /joc
-RUN git checkout aa_no_arithm
+RUN git checkout dali_aa_imgnet_policy
 
 RUN pip list | grep dali
 # The container always lacks this
