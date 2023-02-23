@@ -43,7 +43,7 @@ try:
     from nvidia.dali.pipeline import Pipeline
     import nvidia.dali.ops as ops
     import nvidia.dali.types as types
-    from image_classification.dali_autoaugment import auto_augment_pipe, aa_pipe, ta_pipe
+    from image_classification.dali_autoaugment import aa_pipe, ta_pipe
 
     DATA_BACKEND_CHOICES.append("dali-gpu")
     DATA_BACKEND_CHOICES.append("dali-cpu")
@@ -272,10 +272,7 @@ def get_dali_train_loader(dali_cpu=False, cpu_gpu=0, workspace="/"):
             "enable_memory_stats": True,
         }
 
-        if augmentation == "autoaugment":
-            pipe = auto_augment_pipe(**pipeline_kwargs, rank=rank, world_size=world_size,
-                                     seed=12 + rank % torch.cuda.device_count(), cpu_gpu=cpu_gpu)
-        elif augmentation == "aa":
+        if augmentation == "aa":
             pipe = aa_pipe(**pipeline_kwargs, rank=rank, world_size=world_size,
                            seed=12 + rank % torch.cuda.device_count())
 
